@@ -1,0 +1,1 @@
+Please place the "thor_data_vietnam.csv" file in here from https://data.world/datamil/vietnam-war-thor-data

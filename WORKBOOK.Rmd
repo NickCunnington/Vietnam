@@ -1,0 +1,949 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(lubridate)
+```
+
+
+# Reading in data
+
+
+```{r}
+vietnam <- read_csv("raw_data/thor_data_vietnam.csv",
+                    col_types = cols(weapontypeclass = col_character(), tgtid = col_character(), 
+                                     tgtcloudcover = col_character(), operationsupported = col_character(), 
+                                     tgtcontrol = col_character(),tgtweather = col_character(), 
+                                     releasefltspeed = col_character()))
+```
+
+
+```{r}
+losses <- read_csv("data/us_aircraft_losses.csv")
+```
+
+```{r}
+us_kills <- read_csv("data/us_kills.csv")
+```
+
+```{r}
+losses_by_missile <- read_csv("data/losses_by_missile.csv")
+```
+
+```{r}
+us_kills <- us_kills %>%
+  mutate(date = ymd(date))
+```
+
+
+
+# Remove unneeded columns
+
+
+```{r}
+vietnam <- vietnam %>%
+  select(-c(sourceid, sourcerecord, airforcegroup, airforcesqdn, releasealtitude, 
+            releasefltspeed, resultsbda, tgtid, weapontypeclass, weaponsloadedweight,
+            tgtweather))
+```
+
+
+
+# Data Wrangling and Visualisations
+
+### total missions per day
+
+```{r}
+total_missions_daily <- vietnam %>%
+  group_by(msndate) %>%
+  summarise(num_missions = n()) %>%
+  drop_na()
+```
+
+```{r}
+total_missions_daily %>%
+  ggplot() +
+  aes(x = msndate, y = num_missions) %>%
+  geom_line() 
+```
+
+
+
+
+### total missions per month
+
+```{r}
+total_missions_monthly <- vietnam %>%
+  mutate(month = month(msndate)) %>%
+  mutate(year = year(msndate)) %>%
+  group_by(year, month) %>%
+  summarise(num_missions = n()) %>%
+  drop_na()
+
+total_missions_monthly <- total_missions_monthly %>%
+  mutate(year_month = make_date(year, month)) 
+```
+
+
+```{r}
+total_missions_monthly %>%
+  ggplot() +
+  aes(x = year_month, y = num_missions) %>%
+  geom_line(col = "dark blue") +
+  xlab("\nYear") +
+  ylab("Number of Missions\n") +
+  ggtitle("Total number of allied missions per month\n") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14))
+
+```
+
+
+
+
+### mission per day by service
+
+
+```{r}
+country_per_day <- vietnam %>%
+  select(countryflyingmission, milservice, msndate) %>%
+  group_by(msndate, countryflyingmission) %>%
+  summarise(num_missions = n()) %>%
+  drop_na()
+  
+```
+
+
+```{r}
+country_per_day %>%
+  ggplot() +
+  aes(x = msndate, y = num_missions, colour = countryflyingmission) +
+  geom_line()
+```
+
+
+
+
+### missions per month by service
+
+
+```{r}
+country_per_month <- vietnam %>%
+  select(countryflyingmission, milservice, msndate) %>%
+  mutate(month = month(msndate)) %>%
+  mutate(year = year(msndate)) %>%
+  group_by(year, month, countryflyingmission) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  mutate(year_month = make_date(year, month)) 
+```
+
+
+```{r}
+country_per_month %>%
+  ggplot() +
+  aes(x = year_month, y = num_missions, colour = countryflyingmission) %>%
+  geom_line() +
+  xlab("\nYear") +
+  ylab("Number of Missions\n") +
+  ggtitle("Number of missions per month by all Allied Forces\n") +
+  guides(colour = guide_legend(title = "Country Flying Mission")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(legend.title = element_text(size = 14))
+```
+
+
+
+### missions per day by US allies only
+
+```{r}
+country_per_day_allies <- vietnam %>%
+  filter(countryflyingmission != "UNITED STATES OF AMERICA") %>%
+  select(countryflyingmission, milservice, msndate) %>%
+  group_by(msndate, countryflyingmission) %>%
+  summarise(num_missions = n()) %>%
+  drop_na()
+```
+
+```{r}
+country_per_day_allies %>%
+  ggplot() +
+  aes(x = msndate, y = num_missions, colour = countryflyingmission) +
+  geom_line()
+```
+
+
+
+
+### mission per month per US allies
+
+
+```{r}
+country_per_month_allies <- vietnam %>%
+  filter(countryflyingmission != "UNITED STATES OF AMERICA") %>%
+  select(countryflyingmission, milservice, msndate) %>%
+  mutate(month = month(msndate)) %>%
+  mutate(year = year(msndate)) %>%
+  group_by(year, month, countryflyingmission) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  mutate(year_month = make_date(year, month)) 
+```
+
+```{r}
+country_per_month_allies %>%
+  ggplot() +
+  aes(x = year_month, y = num_missions, colour = countryflyingmission) %>%
+  geom_line() +
+  xlab("\nYear") +
+  ylab("Number of Missions\n") +
+  ggtitle("Number of missions per month by Non-US Forces\n") +
+  guides(colour = guide_legend(title = "Country Flying Mission")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(legend.title = element_text(size = 14))
+```
+
+
+
+### mission per day per US service
+
+```{r}
+service_per_day_US <- vietnam %>%
+  select(countryflyingmission, milservice, msndate) %>%
+  filter(milservice == "USAF" | milservice == "USN" | milservice == "USMC" | milservice == "USMC") %>%
+  group_by(msndate, milservice) %>%
+  summarise(num_missions = n()) %>%
+  drop_na()
+```
+
+```{r}
+service_per_day_US %>%
+  ggplot() +
+  aes(x = msndate, y = num_missions, colour = milservice) +
+  geom_line()
+```
+
+
+
+### mission per month per US service
+
+
+```{r}
+service_per_month_US <- vietnam %>%
+  select(countryflyingmission, milservice, msndate) %>%
+  filter(milservice == "USAF" | milservice == "USN" | milservice == "USMC" | milservice == "USMC") %>%
+  mutate(month = month(msndate)) %>%
+  mutate(year = year(msndate)) %>%
+  group_by(year, month, milservice) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  mutate(year_month = make_date(year, month)) 
+```
+
+```{r}
+service_per_month_US %>%
+  ggplot() +
+  aes(x = year_month, y = num_missions, colour = milservice) %>%
+  geom_line() +
+  xlab("\nYear") +
+  ylab("Number of Missions\n") +
+  ggtitle("Number of missions per month by each US Military Service\n") +
+  guides(colour = guide_legend(title = "US Military Service")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(legend.title = element_text(size = 14))
+```
+
+
+
+### mission per day by aircraft type
+
+```{r}
+aircraft_type_missions_daily <- vietnam %>%
+  select(msndate, aircraft_root, milservice) %>%
+  group_by(msndate, aircraft_root) %>%
+  summarise(num_missions = n()) %>%
+  drop_na()
+  
+```
+
+
+### missions per month by aircraft type
+
+```{r}
+aircraft_type_missions_monthly <- vietnam %>%
+  select(aircraft_root, milservice, msndate) %>%
+  mutate(month = month(msndate)) %>%
+  mutate(year = year(msndate)) %>%
+  group_by(year, month, aircraft_root) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  mutate(year_month = make_date(year, month)) 
+```
+
+
+### target country per day
+
+```{r}
+target_country_daily <- vietnam %>%
+  select(msndate, tgtcountry) %>%
+  filter(tgtcountry != "UNKNOWN" & tgtcountry != "WESTPAC WATERS") %>%
+  group_by(msndate, tgtcountry) %>%
+  summarise(num_missions = n()) %>%
+  drop_na()
+```
+
+```{r}
+target_country_daily %>%
+  ggplot() +
+  aes(x = msndate, y = num_missions, colour = tgtcountry) +
+  geom_line()
+```
+
+
+
+
+
+### target country per month
+
+```{r}
+target_country_monthly <- vietnam %>%
+  select(tgtcountry, msndate) %>%
+  filter(tgtcountry != "UNKNOWN" & tgtcountry != "WESTPAC WATERS") %>%
+  mutate(month = month(msndate)) %>%
+  mutate(year = year(msndate)) %>%
+  group_by(year, month, tgtcountry) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  mutate(year_month = make_date(year, month))
+```
+
+```{r}
+target_country_monthly %>%
+  filter(tgtcountry != "THAILAND", tgtcountry != "PHILLIPINES") %>% 
+  ggplot() +
+  aes(x = year_month, y = num_missions, colour = tgtcountry) %>%
+  geom_line() +
+  xlab("\nYear") +
+  ylab("Number of Missions\n") +
+  ggtitle("Number of missions per month by Target Country\n") +
+  guides(colour = guide_legend(title = "Target Country")) +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(legend.title = element_text(size = 14))
+```
+
+
+
+### hull losses by service
+
+```{r}
+losses %>%
+  filter(service == "USAF" | service == "USN" | service == "USMC" | service == "US Army") %>%
+  group_by(type, service) %>%
+  summarise(losses = sum(losses)) %>%
+  ggplot() +
+  aes(x = service, y = losses, fill = type) %>%
+  geom_col(position = "dodge")
+  
+```
+
+
+
+### hull losses by aircraft type
+
+```{r}
+losses %>%
+  filter(service == "USAF" | service == "USN" | service == "USMC" | service == "US Army") %>%
+  group_by(root, type) %>%
+  arrange(desc(losses)) %>%
+  filter(type == "Aircraft") %>%
+  head(5) %>%
+  ggplot() +
+  aes(x = reorder(root, -(losses)), y = losses) +
+  geom_col(fill = "dark blue")
+```
+
+
+### hull losses by helicopter type
+
+```{r}
+losses %>%
+  filter(service == "USAF" | service == "USN" | service == "USMC" | service == "US Army") %>%
+  group_by(root, type) %>%
+  arrange(desc(losses)) %>%
+  filter(type == "Helicopter") %>%
+  head(5) %>%
+  ggplot() +
+  aes(x = reorder(root, -(losses)), y = losses) +
+  geom_col(fill = "dark blue")
+```
+
+
+
+
+### US kills by aircraft type
+
+
+```{r}
+us_kills %>%
+  group_by(aircraft) %>%
+  summarise(num_kills = n()) %>%
+  arrange(desc(num_kills)) %>%
+  ggplot() +
+  aes(reorder(x = aircraft, -(num_kills)), y = num_kills) +
+  geom_col(fill = "dark blue")
+```
+
+
+### US kills by weapon
+
+```{r}
+us_kills %>%
+  group_by(weapon) %>%
+  summarise(num_kills = n()) %>%
+  arrange(desc(num_kills)) %>%
+  ggplot() +
+  aes(reorder(x = weapon, -(desc(num_kills))), y = num_kills) %>%
+  geom_col(fill = "dark blue") +
+  coord_flip()
+```
+
+
+### US kills by Squadron
+
+```{r}
+us_kills %>%
+  group_by(squadron) %>%
+  summarise(num_kills = n()) %>%
+  arrange(desc(num_kills)) %>%
+  head(5) %>%
+  ggplot() +
+  aes(reorder(x = squadron, -desc(num_kills)), y = num_kills) +
+  geom_col(fill = "dark blue") +
+  coord_flip()
+```
+
+
+
+### US kills by enemy aircraft type
+
+
+```{r}
+us_kills %>%
+  group_by(aircraft_destroyed) %>%
+  summarise(num_kills = n()) %>%
+  arrange(desc(num_kills)) %>%
+  ggplot() +
+  aes(reorder(x = aircraft_destroyed, -(num_kills)), y = num_kills) +
+  geom_col(fill = "dark blue")
+```
+
+
+### US kills by month
+
+```{r}
+us_kills_monthly <- us_kills %>%
+  mutate(month = month(date)) %>%
+  mutate(year = year(date)) %>%
+  group_by(year, month) %>%
+  summarise(num_kills = n()) %>%
+  mutate(year_month = make_date(year, month))
+  
+```
+
+```{r}
+us_kills_monthly %>%
+  ggplot() +
+  aes(x = year_month, y = num_kills) +
+  geom_col()
+```
+
+
+
+### recoding target types
+
+```{r}
+target_type <- vietnam %>%
+  select(milservice, msndate, valid_aircraft_root, tgttype, mfunc_desc, tgtcountry, periodofday, mfunc_desc_class) %>%
+  mutate(tgttype = recode(tgttype, 
+                          
+                          #TRANSPORT  
+                            "TRANSPORT\\TRK\\TRLR" = "TRUCKS", "TRUCK PARK" = "TRUCKS", "TRUCK PARK\\STOP" =
+                            "TRUCKS", "TRANSPORT" = "TRUCKS", "TRUCK" = "TRUCKS", "TRUCK PRK ST" = "TRUCKS", 
+                            "MOTOR VEHICLE" = "TRUCKS", "TRUCK PRK\\ST" = "TRUCKS", "VAN" = "TRUCKS",
+                          #COMMUNICATIONS
+                            "ANTENNA\\RADIO" = "COMMUNICATIONS", "RADIO COMMUNICATN" = "COMMUNICATIONS", 
+                            "ANTENNA" = "COMMUNICATIONS", "RADIO" = "COMMUNICATIONS", "RADIO COMM ANY\\ANT" =
+                            "COMMUNICATIONS", "COMMUNICATIONS\\ANY" = "COMMUNICATIONS", "COMMUNICATIONS VAN" =
+                            "COMMUNICATIONS", "COMM AREA" = "COMMUNICATIONS",
+                          #RADAR
+                            "RADAR SRCH INTERCP" = "RADAR SITE", "RADAR VAN" = "RADAR SITE", "RADAR" = "RADAR SITE",
+                          #HQ
+                            "CCC\\HQ\\RADAR\\ETC" = "HEADQUARTERS", "COMMAND POST" = "HEADQUARTERS", "HQS AREA" =
+                            "HEADQUARTERS", "HQ COMPLEX" = "HEADQUARTERS", "COMD CONTROL CENTR" = "HEADQUARTERS",
+                            "BASE CAMP AREA" = "HEADQUARTERS", "MILITARY COMPLEX" = "HEADQUARTERS", "CAMP" = 
+                            "HEADQUARTERS", "FIREBASE" = "HEADQUARTERS", "MIL BRKS\\ADMIN SPT" = "HEADQUARTERS",
+                            "AREA COMPLEX" = "HEADQUARTERS", "BASE" = "HEADQUARTERS",
+                          #GUN SITE
+                            "85MM GUN SITE" = "GUN SITE", "130MM GUN SITE" = "GUN SITE", "155MM GUN SITE" = "GUN SITE",
+                            "12.7 GUN SITE" = "GUN SITE", "57MM GUN SITE" = "GUN SITE", "105MM GUN SITE" = "GUN SITE",
+                            "14.5MM GUN SITE" = "GUN SITE", "175MM GUN SITE" = "GUN SITE", "100MM GUN SITE" = 
+                            "GUN SITE", "14.5MM GUN SITE" =  "GUN SITE", "NBR OF AAA PIECES" = "GUN SITE", 
+                            "122MM GUN SITE" = "GUN SITE", "23MM GUN SITE" = "GUN SITE", "AAA\\37MM  CR MORE" = 
+                            "GUN SITE", "GUN SITE" = "GUN SITE", "AAA SITE UNK CAL" = "GUN SITE", "ANTI-AIRCRAFT" =
+                            "GUN SITE", "AA SITE" = "GUN SITE", "ARTILLERY" = "GUN SITE",
+                          #SAM SITE
+                            "SAMPANS" = "SAM SITE", "SAM CANISTER" = "SAM SITE", "SA\\3 SITE" = "SAM SITE",
+                            "HH SAM SA\\7" = "SAM SITE", "MISSILE TRANSPORTER" = "SAM SITE", "SA SITE" = "SAM SITE",
+                            "SAM LAUNCHER\\EQMT" = "SAM SITE", "MISSILE" = "SAM SITE",  "LAUNCHER (MISSILE)" = 
+                            "SAM SITE", "SAM OXIDIZER" = "SAM SITE",
+                          #RAILROAD
+                            "MARINE RAILWAY" = "RAILROAD", "RAILROAD VEHICLES" = "RAILROAD", "RAILROAD COMPLEX" =
+                            "RAILROAD", "RAILROAD SIDING" = "RAILROAD", "RAILROAD TRACK" = "RAILROAD",
+                            "RAILROAD STA\\TERM" = "RAILROAD", "ROLLING STOCK" = "RAILROAD", "RAILROAD CROSSING" =
+                            "RAILROAD", "RAILROAD YARDS" = "RAILROAD", "LOCOMT,RAIL VEH" = "RAILROAD", "ROLLING STOCK" =
+                            "RAILROAD", "TRAIN CAR ANY" = "RAILROAD", "RAIL LINES\\ANY" = "RAILROAD",
+                          #BRIDGE
+                            "BRIDGE\\ANY" = "BRIDGE", "FOOT BRIDGE" = "BRIDGE", "RAILROAD BRIDGE" = "BRIDGE", 
+                            "PONTOON BRIDGE" = "BRIDGE", "FORDS\\SUBSURFACE BRIDGE" = "BRIDGE", "BRIDGES" = "BRIDGE",
+                          #AIRFIELD
+                            "AIRCRAFT TRANSPORT" = "AIRFIELD", "AIRCRAFT ON GROUND" = "AIRFIELD", "AIRFIELD\\ANY TYPE" =
+                            "AIRFIELD", "AIRFLD\\ACRFT\\ETC" = "AIRFIELD", "RUNWAY" = "AIRFIELD",
+                          #PORT FACILITY
+                            "SHIPYARD" = "PORT FACILITY", "WHARF" = "PORT FACILITY", "DRY DOCK" = "PORT FACILITY", 
+                            "NAVAL BASE" = "PORT FACILITY", "NAVAL SUPPORT FACILITY" = "PORT FACILITY", 
+                            "PIER" = "PORT FACILITY", "ANCHORAGE" = "PORT FACILITY",
+                          #FACTORY
+                            "FACTORY,ANY" = "FACTORY", "FACTORY INDUSTRIAL" = "FACTORY", "PLANT" = "FACTORY",
+                          #POWER PLANT
+                            "HYDROELEC PWR PLT" = "POWER PLANT", "ELEC. PWR. FAC" = "POWER PLANT", 
+                            "THERMAL POWER PLANT" = "POWER PLANT", "COOLING TOWERS" = "POWER PLANT",
+                            "ELEC. PWR. FAC." = "POWER PLANT",
+                          #SUPPLY
+                            "LOGISTICS\\ANY" = "SUPPLY", "OPEN STORAGE\\DUMP" = "SUPPLY", "SUPPLY STORAGE\\DMPS" =
+                            "SUPPLY", "AMO\\POL\\SUP\\CRT" = "SUPPLY", "AREA\\DEPOT" = "SUPPLY",
+                            "TRK\\PRK\\STORE AREA" = "SUPPLY", "FLOATING BAGS\\BOXES" = "SUPPLY",
+                            "SUPPLIES (MISCELL.)" = "SUPPLY", "SUPPLIES\\RICE\\WEAPONS" = "SUPPLY", 
+                            "AMMO STORAGE\\DUMP" = "SUPPLY", "BIVOUAC\\STORE AREA" = "SUPPLY", "CRATE\\STORAGE CONT" =
+                            "SUPPLY", "STORAGE AREA" = "SUPPLY", "CIV\\DEF\\STOR" = "SUPPLY", "STORAGE AREA" =
+                            "SUPPLY", "WEAPONS\\ANY" = "SUPPLY", "SILO" = "SUPPLY", "WAREHOUSE" = "SUPPLY",
+                          #REFINERY
+                            "REFINERY, ANY" = "REFINERY", "REFINERY, OIL\\GAS" = "REFINERY", "REFINERY (POL)" =
+                            "REFINERY", "DRUM (POL)" = "POL",
+                          #BOAT
+                            "BOATS\\BARGES" = "BOAT", "WATER VEHICLES" = "BOAT", "WATERCRAFT" = "BOAT", "SHIP" =
+                            "BOAT", "FERRY" = "BOAT", "GUNBOAT" = "BOAT",
+                          #MINEFIELD
+                            "MINEABLE AREA" = "MINEFIELD", "MINEFIELD (SEA)" = "MINEFIELD", "MINEFIELD (LAND)" =
+                            "MINEFIELD",
+                          #POL
+                            "TANK (POL)" = "POL", "BUNKER FACILITY (POL)" = "POL", "POL BARRELS" = "POL",
+                            "POL STORAGE" = "POL", "POL TANKS" = "POL",
+                          #ROAD
+                            "ROAD\\HIWAY\\APPRCH" = "ROAD/TRAIL", "ROAD CONST MATERIAL" = "ROAD/TRAIL",
+                            "ROADS\\HIGHWAYS" = "ROAD", "TRAILS" = "ROAD/TRAIL", "ROAD" = "ROAD/TRAIL",
+                          #TUNNEL
+                            "RR TUNNEL" = "TUNNEL", "TUNNELS" = "TUNNEL",
+                          #CAVE
+                            "CAVES" = "CAVE", "CAVE STORAGE" = "CAVE",
+                          #TROOPS
+                            "PERSONNEL\\ANY" = "TROOPS", "FIGHTER" = "TROOPS", "SUSP ENEMY LOC" = "TROOPS", "SNIPER" =
+                            "TROOPS", "BIVOUAC" = "TROOPS", "BIVUOAC AREA" = "TROOPS", "RPTD ENEMY LOC" = "TROOPS",
+                            "FOX HOLES" = "TROOPS",
+                          #DAM
+                            "CAUSEWAY\\DAM" = "DAM", "CAUSEWAY" = "DAM", "DIKE" = "DAM",
+                          #TOWER
+                            "TOWER\\OUTPST\\LKOUT" = "TOWER",
+                          #DEFENSIVE STRUCTURE
+                            "TRENCHES" = "DEFENSE STRUCTURE", "BNKR\\TRENCH\\ETC" = "DEFENSIVE STRUCTURE",
+                            "HIGHER\\REVETMENTS" = "DEFENSIVE STRUCTURE", "TRENCH" = "DEFENSIVE STRUCTURE",
+                            "REVETMENT" = "DEFENSIVE STRUCTURE", "DEFENSE STRUCTURE" = "DEFENSIVE STRUCTURE",
+                          #ARMORED VEHICLE
+                            "TANK PARK" = "ARMORED VEHICLE", "TRACKED VEHICLE" = "ARMORED VEHICLE", "TANK"
+                            = "ARMORED VEHICLE",
+                          #CONSTRUCTION
+                            "CONSTRUCTION VEHICLES" = "CONSTRUCTION", "CONSTRUCTION SITE" = "CONSTRUCTION",
+                            "BULLDOZER" = "CONSTRUCTION",
+                          #ROCKET SITE
+                            "RCKT LNCHR (B40, ETC)" = "ROCKET SITE",
+                          #CIV AREA
+                            "VILLAGE" = "CIV AREA", "CIV POPULATN CENTR" = "CIV AREA",
+                          #TRANSHIPMENT
+                            "TRANSSHIP POINT" = "TRANSHIPMENT POINT",
+                          #CANAL
+                            "WATERWAY" = "CANAL",
+                          #UNKNOWN
+                            "UNKNOWN\\UNIDENTIFIED" = "UNIDENTIFIED"
+                            ))
+  
+```
+
+
+
+### enemy targets types
+
+```{r}
+target_type %>%
+  group_by(tgttype) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  arrange(desc(num_missions)) %>%
+  head(10) %>%
+  ggplot() +
+  coord_flip() +
+  aes(reorder(x = tgttype, -desc(num_missions)), y = num_missions) +
+  geom_col(fill = "dark blue") +
+  xlab("Target Type\n") +
+  ylab("\nNumber of Missions") +
+  ggtitle("Top 10 Target Types\n") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(axis.text = element_text(size = 12))
+  
+```
+
+
+
+
+### missions by type
+
+```{r}
+target_type %>%
+  group_by(mfunc_desc) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  arrange(desc(num_missions)) %>%
+  head(10) %>%
+  ggplot() +
+  aes(reorder(x = mfunc_desc, -(desc(num_missions))), y = num_missions) +
+  coord_flip() +
+  geom_col(fill = "dark blue") 
+```
+
+
+### targets by time of day
+
+```{r}
+target_type %>%
+  mutate(periodofday = recode(periodofday, "D" = "Day", "N" = "Night", "M" = "Morning", "E" = "Evening")) %>%
+  group_by(periodofday) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  arrange(desc(num_missions)) %>%
+  head(4) %>%
+  ggplot() +
+  aes(reorder(x = periodofday, -(num_missions)), y = num_missions) +
+  geom_col(fill = "dark blue")
+  
+  
+```
+
+
+###  Target types by aircraft root
+
+```{r}
+target_type %>%
+  group_by(tgttype, valid_aircraft_root) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  arrange(desc(num_missions)) %>%
+  head(9) %>%
+  ggplot() +
+  aes(reorder(x = tgttype, -(desc(num_missions))), y = num_missions, fill = valid_aircraft_root) +
+  coord_flip() +
+  geom_col(position = "dodge")
+```
+
+
+### types of mission
+
+```{r}
+target_type %>%
+  group_by(mfunc_desc_class) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  arrange(desc(num_missions)) %>%
+  ggplot() +
+  aes(x = mfunc_desc_class, y = num_missions) +
+  geom_col(fill = "dark blue")
+  
+```
+
+
+
+### top 10 non-kinetic missions types
+
+```{r}
+target_type %>%
+  filter(mfunc_desc_class == "NONKINETIC") %>%
+  group_by(mfunc_desc) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  arrange(desc(num_missions)) %>%
+  head(10) %>%
+  ggplot() +
+  aes(reorder(x = mfunc_desc, -(desc(num_missions))), y = num_missions) +
+  coord_flip() +
+  geom_col(fill = "dark blue") +
+  xlab("Mission Type\n") +
+  ylab("\nNumber of Missions") +
+  ggtitle("Number of missions per non-kinetic mission type\n") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(axis.text = element_text(size = 12))
+```
+
+
+
+
+### top 10 kinetic misson types
+
+```{r}
+target_type %>%
+  filter(mfunc_desc_class == "KINETIC") %>%
+  group_by(mfunc_desc) %>%
+  summarise(num_missions = n()) %>%
+  drop_na() %>%
+  arrange(desc(num_missions)) %>%
+  head(10) %>%
+  ggplot() +
+  aes(reorder(x = mfunc_desc, -desc(num_missions)), y = num_missions) +
+  coord_flip() +
+  geom_col(fill = "dark blue") +
+  xlab("Mission Type\n") +
+  ylab("\nNumber of Missions") +
+  ggtitle("Number of missions per kinetic mission type\n") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(axis.text = element_text(size = 12))
+```
+
+
+### Airbases
+
+```{r}
+vietnam %>%
+  group_by(takeofflocation) %>%
+  summarise(num_missions = n()) %>%
+  arrange(desc(num_missions)) %>%
+  head(10) %>%
+  ggplot() +
+  coord_flip() +
+  aes(reorder(x = takeofflocation, -desc(num_missions)), y = num_missions) +
+  geom_col(fill = "dark blue")
+  
+```
+
+
+
+
+
+### ArcGIS master data
+
+```{r}
+arcgis_master <- vietnam %>% 
+  select(msndate, countryflyingmission, milservice, aircraft_root, tgtcountry, 
+         mfunc_desc_class, mfunc_desc, tgttype, callsign, 
+         operationsupported, tgtlatdd_ddd_wgs84, tgtlonddd_ddd_wgs84) %>% 
+  mutate(msndate = ymd(msndate)) %>%
+  drop_na(msndate) %>%
+  filter(tgtcountry != "UNKNOWN" & tgtcountry != "WESTPAC WATERS") 
+```
+
+
+
+### Radio relay missions
+
+
+```{r}
+laos <- arcgis_master %>%
+  filter(tgtcountry == "LAOS") 
+```
+
+
+```{r}
+#EC-121R Batcat
+
+batcat <- laos[grep("BATCAT[0-9]*[a-zA-Z]*", laos$callsign, perl = TRUE), ]
+num_batcat <- nrow(batcat)
+```
+
+
+```{r}
+#EC-130 missions
+
+num_ec130 <- nrow(laos %>% 
+  filter(aircraft_root == "EC130") %>% 
+  arrange(msndate))
+```
+
+
+```{r}
+#QU-22 missions
+
+num_qu22 <- nrow(laos %>% 
+  filter(aircraft_root == "QU22") %>% 
+  arrange(desc(msndate)))
+```
+
+
+```{r}
+# total missions 
+
+relay_missions <- data.frame(aircraft_type = c("EC-130", "QU-22", "EC-121R"),
+                             number_missions = c(num_ec130, num_qu22, num_batcat))
+relay_missions
+```
+
+
+```{r}
+relay_missions %>%
+  ggplot +
+  aes(reorder(x = aircraft_type, -(number_missions)), y = number_missions) +
+  geom_col(fill = "darkblue") +
+  xlab("\nAircraft Type") +
+  ylab("Number of Missions\n") +
+  ggtitle("Number of Radio Relay and Command and Control missions in Laos\n") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(axis.text = element_text(size = 12))
+  
+```
+
+
+
+
+```{r}
+unique(arcgis_master$mfunc_desc)
+```
+
+
+### Psychological Warfare
+
+```{r}
+arcgis_master %>%
+  filter(mfunc_desc == "PSYCHOLOGIC WARFARE") %>% 
+  group_by(aircraft_root) %>%
+  summarise(num_missions = n()) %>%
+  arrange(desc(num_missions)) %>%
+  head(5) %>%
+  ggplot +
+  aes(reorder(x = aircraft_root, -(num_missions)), y = num_missions) +
+  geom_col(fill = "darkblue") +
+  xlab("\nAircraft Type") +
+  ylab("Number of Missions\n") +
+  ggtitle("Number of psychological warfare missions by aircraft type\n") +
+  theme_bw() +
+  theme(plot.title = element_text(hjust = 0.5, size = 18, face = "bold")) +
+  theme(axis.title.x = element_text(size = 14)) +
+  theme(axis.title.y = element_text(size = 14)) +
+  theme(axis.text = element_text(size = 12))
+```
+
+
+
+
+
+
+############ ArcGIS data export ############
+
+
+
+```{r}
+# radio relay data
+
+arcgis_relay <- arcgis_master %>% 
+  filter(mfunc_desc == "RADIO RELAY") %>% 
+  drop_na(tgtlonddd_ddd_wgs84)
+```
+
+```{r}
+# extractions data
+
+arcgis_extraction <- arcgis_master %>% 
+  filter(mfunc_desc == "EXTRACTION (PLADS)" | mfunc_desc == "EXTRACTION (LAPES)" |
+         mfunc_desc == "EXTRACTION (GPES)") %>% 
+  drop_na(tgtlonddd_ddd_wgs84)
+```
+
+```{r}
+# armed recce data
+
+arcgis_recce <- arcgis_master %>%
+  filter(mfunc_desc == "ARMED RECCE") %>%
+  drop_na(tgtlonddd_ddd_wgs84)
+```
+
+```{r}
+# kinetic missions 
+
+arcgis_kinetic <- arcgis_master %>%
+  filter(mfunc_desc_class == "KINETIC" | aircraft_root == "B52") %>% 
+  drop_na(tgtlonddd_ddd_wgs84)
+```
+
+```{r}
+#non-kinetic missions 
+
+arcgis_nonkinetic <- arcgis_master %>%
+  filter(mfunc_desc_class == "NONKINETIC" & aircraft_root != "B52") %>%
+  drop_na(tgtlonddd_ddd_wgs84)
+```
+
+```{r}
+#cambodia missions 
+
+arcgis_cambodia <- arcgis_master %>%
+  filter(tgtcountry == "CAMBODIA") %>%
+  drop_na(tgtlatdd_ddd_wgs84)
+```
+
+```{r}
+#laos missions 
+
+arcgis_laos <- arcgis_master %>%
+  filter(tgtcountry == "LAOS") %>%
+  drop_na(tgtlatdd_ddd_wgs84) 
+```
+
+
+```{r}
+#export to csv
+
+write_csv(total_missions_monthly, "clean_data/monthly_missions.csv")
+write_csv(arcgis_extraction, "clean_data/extraction.csv")
+write_csv(arcgis_master, "clean_data/master.csv")
+write_csv(arcgis_recce, "clean_data/recce.csv")
+write_csv(arcgis_relay, "clean_data/relay_na.csv")
+write_csv(arcgis_kinetic, "clean_data/kinetic.csv")
+write_csv(arcgis_nonkinetic, "clean_data/nonkinetic.csv")
+write_csv(arcgis_cambodia, "clean_data/cambodia.csv")
+write_csv(arcgis_laos, "clean_data/laos.csv")
+```
+
+
+
