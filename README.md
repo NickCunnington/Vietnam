@@ -12,7 +12,7 @@
 
 The presentation for this project is in ArcGIS Story Maps format and is available as a webpage at:
 
-*(enter url here!)*
+https://storymaps.arcgis.com/stories/ee9e2ca5e68e4c41887bb4832ee6f89f
 
 <br>
 
